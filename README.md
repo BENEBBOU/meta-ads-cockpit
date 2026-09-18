@@ -19,7 +19,7 @@ rate where e-commerce norms sit between 40 and 70%. Meta's optimiser cannot
 learn to find buyers from 26 examples, so every campaign on the account is
 being optimised on a broken signal. Cheapest, highest-impact fix available.
 
-**An placement burning money.** Audience Network cost \$58.62 per checkout
+**A placement burning money.** Audience Network cost \$58.62 per checkout
 against \$3.55 on the Instagram feed — a factor of 16, on 7% of the budget.
 Turning it off is a checkbox.
 
