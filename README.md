@@ -81,6 +81,31 @@ about an hour and will die mid-run.
 
 ---
 
+## Local app
+
+The CLIs above are the source of truth; `app/` is a Streamlit interface over
+them for day-to-day use — no line of statistical logic is duplicated, every
+page is a thin wrapper calling the same `analysis/*` functions.
+
+```bash
+pip install -r requirements-app.txt
+streamlit run app/Home.py        # or double-click start_app.bat
+```
+
+Six pages: **Home** (KPIs, extraction status), **Pipeline** (trigger a
+refresh or a synthetic regeneration from the browser, watch it live),
+**Entonnoir**, **Segments**, **Alerte précoce**, **Créative** (interactive
+versions of the analyses above), and **Figures** (regenerate the report's 8
+PNGs on demand). A sidebar toggle switches between the real warehouse and a
+synthetic one (`data_sample/`, built from the Pipeline page) — each lives in
+its own directory, so nothing synthetic ever touches real data.
+
+Runs entirely on `127.0.0.1`, never exposed. The Pipeline page's background
+runs and `refresh_all.py` (e.g. a scheduled task) share the same lock file,
+so the two cannot write to the warehouse at the same time.
+
+---
+
 ## Architecture
 
 ```
@@ -224,10 +249,16 @@ analysis/
 run_backfill.py         extraction CLI
 build_warehouse.py      DuckDB views
 run_*_analysis.py       analysis CLIs
+refresh_all.py          orchestrates extraction -> warehouse -> publish
 make_sample_data.py     synthetic dataset
 make_figures.py         report figures, generated from the warehouse
 explore.py              browse / export
 rapport/                LaTeX report
+app/                    local Streamlit interface (see "Local app" above)
+├── Home.py, pages/1-6  one page per analysis module + pipeline control
+└── lib/
+    ├── data_access.py      connection cache, real/synthetic source switch
+    └── pipeline_state.py   lock, run history, log — background subprocess runs
 ```
 
 Every figure in the report is produced by `make_figures.py` straight from the

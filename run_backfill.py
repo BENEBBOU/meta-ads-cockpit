@@ -142,6 +142,18 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     windows = month_windows(args.months)
     checkpoint = Checkpoint(settings.checkpoint_path)
+
+    # A month marked complete is skipped forever. That is right for a one-off
+    # backfill and wrong for a recurring refresh: the current month was
+    # checkpointed when it was still partial, so its remaining days would never
+    # be fetched. --refresh forgets the most recent months so they are redone.
+    if args.refresh:
+        recent = windows[-args.refresh:]
+        for name in selected:
+            for window in recent:
+                checkpoint.forget(name, window.label)
+        logging.info("rafraîchissement : %s dernier(s) mois réextrait(s) — %s",
+                     args.refresh, ", ".join(w.label for w in recent))
     logging.info(
         "%s pass(es) x %s month(s): %s .. %s",
         len(selected), len(windows), windows[0].label, windows[-1].label,
@@ -222,6 +234,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--months", type=int, default=MAX_MONTHS_BACK,
         help=f"how many months back to go (max {MAX_MONTHS_BACK}, default %(default)s)",
+    )
+    run.add_argument(
+        "--refresh", type=int, default=0, metavar="N",
+        help="réextraire les N derniers mois même s'ils sont déjà enregistrés "
+             "(indispensable pour un rafraîchissement périodique)",
     )
     run.add_argument(
         "--dry-run", action="store_true",

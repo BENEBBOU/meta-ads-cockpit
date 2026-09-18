@@ -221,7 +221,12 @@ def fig_early_warning(con) -> None:
     from sklearn.metrics import roc_auc_score
 
     df = build_dataset(con)
-    train, test = temporal_split(df)
+    # temporal_split returns the boundary actually used alongside the two
+    # frames (it falls back to a data-derived quantile when the fixed
+    # calendar cutoff does not separate the data — see its docstring), so the
+    # label below stays accurate instead of naming a specific pair of months
+    # that a re-run on different data would silently outgrow.
+    train, test, boundary = temporal_split(df)
     _, ev = fit_and_evaluate(train, test)
     cv = grouped_cv_auc(df)
 
@@ -231,7 +236,7 @@ def fig_early_warning(con) -> None:
     rows = [
         ("Checkouts/$ seul\n(VC groupée)", cv["auc_univariate"], uni_ci),
         ("Modèle 6 variables\n(VC groupée)", cv["auc"], cv["ci"]),
-        ("Modèle 6 variables\n(juillet → août)", ev.auc_model, ev.auc_ci),
+        (f"Modèle 6 variables\n(avant/après {boundary.date()})", ev.auc_model, ev.auc_ci),
     ]
     fig, ax = plt.subplots(figsize=(6.2, 2.4))
     for i, (label, auc, (lo, hi)) in enumerate(rows):

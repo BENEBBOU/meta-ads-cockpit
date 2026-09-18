@@ -67,6 +67,15 @@ class Checkpoint:
         if self._entries.pop(self.key(pass_name, month), None) is not None:
             self._save()
 
+    def entries(self) -> dict[str, dict]:
+        """A copy of the raw ``"pass:month" -> metadata`` records.
+
+        ``summary()`` collapses this to a per-pass row total; callers that
+        need per-month detail (a completion matrix, say) use this instead of
+        reaching into ``_entries`` directly.
+        """
+        return dict(self._entries)
+
     def summary(self) -> dict[str, int]:
         """Rows extracted per pass, according to the recorded units."""
         totals: dict[str, int] = {}

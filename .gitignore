@@ -5,10 +5,14 @@
 
 # Extracted data — never commit business data
 data/
+data_sample/
 export/
 *.duckdb
 *.parquet
 *.csv
+
+# App runtime state — lock file, run history, live log (app/pages/1_Pipeline.py)
+app_state/
 
 # Python
 __pycache__/

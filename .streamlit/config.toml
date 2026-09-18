@@ -1,0 +1,19 @@
+# Visual identity matched to make_figures.py's palette (INK/ACCENT/WARN/GOOD/GREY),
+# so the app and the report figures read as the same product rather than two
+# different tools glued together.
+
+[theme]
+base = "light"
+primaryColor = "#2f6f9f"            # ACCENT — buttons, active tabs, sliders
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f6f8" # sidebar, cards
+textColor = "#1f2933"               # INK
+font = "sans serif"
+
+[server]
+headless = true
+address = "127.0.0.1"
+port = 8501
+
+[browser]
+gatherUsageStats = false

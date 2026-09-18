@@ -1,0 +1,6 @@
+# Additional dependencies for the local dashboard app.
+# The extraction/analysis pipeline itself only needs requirements.txt —
+# this file is kept separate so the CLI scripts never gain a dependency
+# on a UI framework.
+streamlit>=1.37
+plotly>=5.20
