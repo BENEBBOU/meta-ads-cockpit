@@ -130,6 +130,6 @@ else:
     st.dataframe(table, hide_index=True, width="stretch")
 
 st.caption(
-    "Les pages Entonnoir, Segments, Alerte précoce, Créative et Pipeline "
-    "arrivent aux étapes suivantes de la construction."
+    "Naviguer dans le menu latéral : Pipeline (extraction et rafraîchissement), "
+    "Entonnoir, Segments, Alerte précoce, Créative et Figures du rapport."
 )

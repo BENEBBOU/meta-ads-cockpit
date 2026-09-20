@@ -112,7 +112,10 @@ def _checkpoint_heatmap(data_dir: Path) -> None:
     months = sorted(set(expected) | set(seen))
     passes = list(DEFAULT_PASS_ORDER)
 
-    if not months:
+    # Nothing on the calendar (synthetic source with only lump entries): the
+    # caption above already says what exists, and an all-empty grid would
+    # only invite Plotly to invent a date axis for it.
+    if not months or not seen:
         return
 
     z, text = [], []
@@ -139,7 +142,10 @@ def _checkpoint_heatmap(data_dir: Path) -> None:
     fig.update_layout(
         height=max(220, 24 * len(months) + 60),
         margin=dict(l=10, r=10, t=10, b=10),
-        yaxis={"autorange": "reversed"},
+        # Category axes: "2024-01" labels must stay literal, not be parsed as
+        # dates and re-ticked by Plotly.
+        xaxis={"type": "category"},
+        yaxis={"type": "category", "autorange": "reversed"},
         font=dict(size=10),
     )
     st.plotly_chart(fig, width="stretch")

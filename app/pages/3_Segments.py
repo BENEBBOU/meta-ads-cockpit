@@ -112,8 +112,8 @@ if result.frame.empty:
     st.stop()
 
 st.caption(
-    f"Taux compte : **{result.global_rate:.4f} conv/$** "
-    f"({result.total_conversions:,.0f} conversions sur {result.total_spend:,.0f} $) · "
+    f"Taux compte : **{result.global_rate:.4f} conv/\\$** "
+    f"({result.total_conversions:,.0f} conversions sur {result.total_spend:,.0f} \\$) · "
     f"dispersion φ = {result.dispersion:.1f} · {len(result.frame)} segment(s) testé(s)"
 )
 

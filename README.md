@@ -209,6 +209,13 @@ kept in `actions_raw`, so an action type not anticipated here is recoverable.
 
 `python explore.py export` writes every view to CSV for spreadsheet use.
 
+`python export_powerbi.py` writes a star schema (date, campaign and ad
+dimensions; daily, demographic, placement, region and hourly facts; the
+bootstrap segment results with confidence intervals and FDR-adjusted q-values)
+under `export/powerbi/`, ready for Power BI Desktop. Relationships, DAX
+measures and a six-page dashboard layout are described in
+[`docs/powerbi.md`](docs/powerbi.md).
+
 ---
 
 ## Limits
@@ -250,6 +257,7 @@ run_backfill.py         extraction CLI
 build_warehouse.py      DuckDB views
 run_*_analysis.py       analysis CLIs
 refresh_all.py          orchestrates extraction -> warehouse -> publish
+export_powerbi.py       star-schema CSV export for Power BI (docs/powerbi.md)
 make_sample_data.py     synthetic dataset
 make_figures.py         report figures, generated from the warehouse
 explore.py              browse / export
