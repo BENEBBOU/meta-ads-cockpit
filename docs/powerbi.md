@@ -40,6 +40,13 @@ Toutes les tables de faits portent les mêmes mesures brutes : `impressions`, `r
    entiers à 17 chiffres, Power BI les arrondirait en nombre décimal.
 3. **Fermer et appliquer**.
 
+> **Séparateur décimal.** Les CSV utilisent le point (`3.40`), comme tout export
+> technique. Power BI les interprète selon les *paramètres régionaux du fichier*,
+> hérités de Windows. Si les colonnes numériques arrivent en texte ou multipliées
+> par cent, aller dans **Fichier → Options → Fichier actuel → Paramètres
+> régionaux** et choisir **Anglais (États-Unis)**, puis actualiser. (Sur ce poste,
+> la culture Windows est déjà `en-US` : rien à changer.)
+
 ## 3. Modèle (vue Modèle)
 
 Relations à créer, toutes en **1 → \*** avec filtrage dans une seule direction :
