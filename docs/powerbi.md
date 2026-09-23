@@ -1,8 +1,8 @@
 # Tableau de bord Power BI
 
-`export_powerbi.py` transforme l'entrepôt DuckDB en un **schéma en étoile** (fichiers
-CSV dans `export/powerbi/`) que Power BI Desktop lit sans connecteur particulier.
-Ce document décrit le modèle, les mesures DAX et les pages proposées.
+`export_powerbi.py` transforme l'entrepôt DuckDB en un **schéma en étoile** que Power BI
+Desktop lit sans connecteur particulier. Ce document décrit le modèle, les mesures DAX
+et les pages proposées.
 
 Power BI Desktop est gratuit sur Windows (Microsoft Store ou
 <https://powerbi.microsoft.com/desktop>). Aucune licence Pro n'est nécessaire pour
@@ -13,19 +13,33 @@ un tableau de bord local ; la licence ne sert qu'à publier sur le service en li
 ```bash
 python export_powerbi.py               # entrepôt réel, ~2 min (bootstrap des segments)
 python export_powerbi.py --skip-stats  # sans les analyses statistiques, quelques secondes
+python export_powerbi.py --csv         # ajoute un CSV par table, pour d'autres outils
 ```
 
-| Fichier | Grain | Lignes (compte réel) |
+Le script écrit **un classeur Excel**, `export/powerbi/meta_ads_powerbi.xlsx`, avec une
+feuille par table.
+
+Excel plutôt que CSV, pour une raison concrète : un CSV est du texte, et Power BI le lit
+avec les paramètres régionaux de sa **langue d'affichage**. Sur une installation
+française, `21.16` devient silencieusement 2116 et `36323.0` devient 363230 — sans
+message d'erreur, et le réglage « Paramètres régionaux » du fichier ne corrige pas les
+étapes de typage déjà enregistrées. Un classeur transporte les types réels, donc le
+problème ne peut pas se poser. Pour la même raison, les identifiants Meta (17 à 18
+chiffres) sont écrits en **texte** : Excel stocke les nombres en virgule flottante,
+exacte jusqu'à 15 chiffres seulement, et un identifiant altéré casse les relations
+sans prévenir.
+
+| Feuille | Grain | Lignes (compte réel) |
 |---|---|---|
-| `dim_date.csv` | un jour | 1 036 |
-| `dim_campaign.csv` | une campagne (+ `event_id` selon la convention hashtag / numéro en tête) | 106 |
-| `dim_ad.csv` | une annonce (+ ensemble, campagne, type de créative, vidéo ou non, longueur du texte) | 378 |
-| `fact_daily.csv` | annonce × jour | 3 759 |
-| `fact_age_gender.csv` | annonce × jour × âge × genre | 44 775 |
-| `fact_placement.csv` | annonce × jour × plateforme × position × appareil | 91 108 |
-| `fact_region.csv` | annonce × jour × région | 7 012 |
-| `fact_hourly.csv` | campagne × jour × heure | 25 556 |
-| `stat_segments.csv` | un segment par dimension : indice, IC bootstrap, valeur q (FDR) | 58 |
+| `dim_date` | un jour | 1 036 |
+| `dim_campaign` | une campagne (+ `event_id` selon la convention hashtag / numéro en tête) | 106 |
+| `dim_ad` | une annonce (+ ensemble, campagne, type de créative, vidéo ou non, longueur du texte) | 378 |
+| `fact_daily` | annonce × jour | 3 759 |
+| `fact_age_gender` | annonce × jour × âge × genre | 44 775 |
+| `fact_placement` | annonce × jour × plateforme × position × appareil | 91 108 |
+| `fact_region` | annonce × jour × région | 7 012 |
+| `fact_hourly` | campagne × jour × heure | 25 556 |
+| `stat_segments` | un segment par dimension : indice, IC bootstrap, valeur q (FDR) | 58 |
 
 Toutes les tables de faits portent les mêmes mesures brutes : `impressions`, `reach`,
 `clicks`, `spend`, `link_click`, `landing_page_view`, `view_content`, `add_to_cart`,
@@ -33,19 +47,17 @@ Toutes les tables de faits portent les mêmes mesures brutes : `impressions`, `r
 
 ## 2. Charger dans Power BI Desktop
 
-1. **Obtenir les données → Texte/CSV**, un fichier à la fois (ou **Dossier** puis
-   « Combiner » n'est *pas* recommandé : les schémas diffèrent d'un fichier à l'autre).
-2. Dans Power Query, vérifier que `date` est typée *Date* (pas *Date/Heure*) et que les
-   identifiants `campaign_id`, `ad_id`, `adset_id` sont typés **Texte** — ce sont des
-   entiers à 17 chiffres, Power BI les arrondirait en nombre décimal.
-3. **Fermer et appliquer**.
+**Obtenir les données → Classeur Excel**, choisir `meta_ads_powerbi.xlsx`. Dans le
+navigateur, cocher **« Sélectionner plusieurs éléments »**, puis les feuilles voulues,
+et cliquer **Charger** — surtout pas « Transformer les données » : les types sont déjà
+corrects, il n'y a rien à retoucher.
 
-> **Séparateur décimal.** Les CSV utilisent le point (`3.40`), comme tout export
-> technique. Power BI les interprète selon les *paramètres régionaux du fichier*,
-> hérités de Windows. Si les colonnes numériques arrivent en texte ou multipliées
-> par cent, aller dans **Fichier → Options → Fichier actuel → Paramètres
-> régionaux** et choisir **Anglais (États-Unis)**, puis actualiser. (Sur ce poste,
-> la culture Windows est déjà `en-US` : rien à changer.)
+Pour une première prise en main, `dim_date`, `dim_campaign`, `dim_ad` et `fact_daily`
+suffisent à construire la page Vue d'ensemble.
+
+Contrôle immédiat après le chargement : une carte affichant la mesure `Dépense` doit
+donner **44 017 $**, et `Checkouts` **9 670** — les chiffres de la page d'accueil de
+l'application Streamlit. S'ils diffèrent, c'est un problème de typage, pas d'analyse.
 
 ## 3. Modèle (vue Modèle)
 
@@ -59,13 +71,23 @@ dim_ad[ad_id]             → fact_daily[ad_id], fact_age_gender[ad_id], fact_pl
 dim_campaign[campaign_id] → dim_ad[campaign_id], fact_hourly[campaign_id]
 ```
 
-Marquer `dim_date` comme **table de dates** (Outils de table → Marquer comme table de
-dates) pour activer l'intelligence temporelle. Masquer les colonnes `campaign_id` et
-`ad_id` des tables de faits pour que les utilisateurs filtrent par les dimensions.
+`stat_segments` reste isolée : elle porte des résultats déjà agrégés, qu'aucun filtre du
+modèle ne doit recalculer.
+
+Power BI propose des relations automatiquement au chargement. Vérifier la liste dans
+**Gérer les relations** et supprimer celles qui font doublon — en particulier
+`fact_daily[campaign_id] → dim_campaign[campaign_id]`, qui crée un second chemin vers
+les faits alors que `dim_campaign → dim_ad → fact_daily` existe déjà. Power BI la
+désactive de lui-même ; autant l'enlever.
+
+Marquer `dim_date` comme **table de dates** (clic droit sur la table dans le volet
+Données → Marquer comme table de dates → colonne `date`) pour activer l'intelligence
+temporelle. Masquer les colonnes `campaign_id` et `ad_id` des tables de faits pour que
+les utilisateurs filtrent par les dimensions.
 
 ## 4. Mesures DAX
 
-Créer une table `Mesures` vide (Entrer des données) et y placer :
+Clic droit sur `fact_daily` → **Nouvelle mesure**, une par formule :
 
 ```dax
 Dépense = SUM ( fact_daily[spend] )
@@ -103,7 +125,7 @@ Règle J+2 = DIVIDE ( [Checkouts J+2], [Dépense J+2] )
 
 L'indice DAX est un indice *descriptif* : il reproduit le point estimé mais pas
 l'intervalle de confiance ni la correction pour tests multiples, qui exigent un
-bootstrap. C'est pour cela que `stat_segments.csv` est fourni : ses colonnes
+bootstrap. C'est pour cela que la feuille `stat_segments` est fournie : ses colonnes
 `rate_ci_low`, `rate_ci_high`, `q_value` et `significant` viennent du code Python et
 se visualisent telles quelles (barres d'erreur, mise en forme conditionnelle).
 
@@ -127,15 +149,15 @@ ajouter une étape dans `refresh.bat` :
 python export_powerbi.py --skip-stats
 ```
 
-puis, dans Power BI Desktop, **Accueil → Actualiser** (les requêtes pointent sur le
-dossier, les fichiers sont simplement relus). Sur le service Power BI, une
-*passerelle de données* locale permet d'automatiser cette actualisation.
+puis, dans Power BI Desktop, **Accueil → Actualiser** : le classeur est simplement relu,
+le modèle et les visuels sont conservés. Sur le service Power BI, une *passerelle de
+données* locale permet d'automatiser cette actualisation.
 
 ## 7. Confidentialité
 
-`export/` est exclu du dépôt Git (`.gitignore`). Les CSV contiennent les noms de
-campagnes réels : ne pas partager le dossier ni publier le `.pbix` en dehors de
-l'entreprise. Pour une démonstration publique, exporter depuis le jeu synthétique :
+`export/` est exclu du dépôt Git (`.gitignore`). Le classeur contient les noms de
+campagnes réels : ne pas le partager ni publier le `.pbix` en dehors de l'entreprise.
+Pour une démonstration publique, exporter depuis le jeu synthétique :
 
 ```bash
 set BACKFILL_DATA_DIR=data_sample

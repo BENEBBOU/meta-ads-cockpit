@@ -1,25 +1,32 @@
 """Export the warehouse as a star schema for Power BI (or any BI tool).
 
-Writes CSV files (UTF-8, comma, ISO dates) under export/powerbi/:
+Writes one Excel workbook, export/powerbi/meta_ads_powerbi.xlsx, with a sheet
+per table (add --csv to also write one CSV per table).
 
-    dim_date.csv            one row per calendar day covered by the account
-    dim_campaign.csv        campaign, event id derived from the name, activity window
-    dim_ad.csv              ad, ad set, campaign, creative traits
-    fact_daily.csv          ad x day, all funnel metrics
-    fact_age_gender.csv     ad x day x age x gender
-    fact_placement.csv      ad x day x platform x position x device
-    fact_region.csv         ad x day x region
-    fact_hourly.csv         campaign x day x hour of day
-    stat_segments.csv       output of analysis.segments for every dimension:
-                            performance index, bootstrap CI, FDR-adjusted q
+Excel is the default because it carries real numeric and date types. A CSV is
+text, and Power BI parses that text with the locale of its *display language*,
+so on a French install "21.16" silently becomes 2116. A workbook removes that
+whole class of problem.
 
-Power BI reads the folder with Get Data > Text/CSV (one query per file) or
-Get Data > Folder. Relationships and suggested DAX measures are documented
-in docs/powerbi.md.
+Sheets:
+
+    dim_date            one row per calendar day covered by the account
+    dim_campaign        campaign, event id derived from the name, activity window
+    dim_ad              ad, ad set, campaign, creative traits
+    fact_daily          ad x day, all funnel metrics
+    fact_age_gender     ad x day x age x gender
+    fact_placement      ad x day x platform x position x device
+    fact_region         ad x day x region
+    fact_hourly         campaign x day x hour of day
+    stat_segments       output of analysis.segments for every dimension:
+                        performance index, bootstrap CI, FDR-adjusted q
+
+Relationships and suggested DAX measures are documented in docs/powerbi.md.
 
 Usage:
     python export_powerbi.py                 # real warehouse (data/)
     python export_powerbi.py --skip-stats    # facts and dimensions only
+    python export_powerbi.py --csv           # also write one CSV per table
     BACKFILL_DATA_DIR=data_sample python export_powerbi.py
 """
 from __future__ import annotations
@@ -53,10 +60,32 @@ def event_id(campaign_name: str | None, campaign_id: str) -> str:
     return m.group(1) if m else campaign_id
 
 
-def _write(df: pd.DataFrame, out_dir: Path, name: str) -> None:
-    path = out_dir / f"{name}.csv"
-    df.to_csv(path, index=False, encoding="utf-8-sig", date_format="%Y-%m-%d")
+# Collected in order, then written together: one workbook, one sheet per table.
+_TABLES: list[tuple[str, pd.DataFrame]] = []
+
+
+def _write(df: pd.DataFrame, name: str) -> None:
+    # Meta ids run to 18 digits. Excel stores every number as a double, which is
+    # exact to ~15 digits, so an id written as a number comes back altered and
+    # the model's relationships silently stop matching. Keys go out as text.
+    df = df.copy()
+    for col in df.columns:
+        if col.endswith("_id"):
+            df[col] = df[col].astype("string")
+    _TABLES.append((name, df))
     print(f"  {name:<18} {len(df):>8,} lignes".replace(",", " "))
+
+
+def _flush(out_dir: Path, *, also_csv: bool) -> Path:
+    book = out_dir / "meta_ads_powerbi.xlsx"
+    with pd.ExcelWriter(book, engine="openpyxl", datetime_format="yyyy-mm-dd") as writer:
+        for name, df in _TABLES:
+            df.to_excel(writer, sheet_name=name[:31], index=False)
+    if also_csv:
+        for name, df in _TABLES:
+            df.to_csv(out_dir / f"{name}.csv", index=False, encoding="utf-8-sig",
+                      date_format="%Y-%m-%d")
+    return book
 
 
 def _facts(con: duckdb.DuckDBPyConnection, view: str, extra_dims: list[str], key: str = "ad_id") -> pd.DataFrame:
@@ -71,7 +100,7 @@ def _facts(con: duckdb.DuckDBPyConnection, view: str, extra_dims: list[str], key
     return con.sql(sql).df()
 
 
-def export(out_dir: Path, *, skip_stats: bool, n_boot: int) -> None:
+def export(out_dir: Path, *, skip_stats: bool, n_boot: int, also_csv: bool = False) -> None:
     settings = load_settings()
     db = settings.data_dir / "meta_ads.duckdb"
     if not db.exists():
@@ -92,7 +121,7 @@ def export(out_dir: Path, *, skip_stats: bool, n_boot: int) -> None:
     dates["day_of_week"] = dates["date"].dt.dayofweek + 1
     dates["day_name"] = dates["date"].dt.strftime("%A")
     dates["is_weekend"] = dates["day_of_week"] >= 6
-    _write(dates, out_dir, "dim_date")
+    _write(dates, "dim_date")
 
     campaigns = con.sql("""
         SELECT campaign_id, ANY_VALUE(campaign_name) AS campaign_name,
@@ -101,7 +130,7 @@ def export(out_dir: Path, *, skip_stats: bool, n_boot: int) -> None:
         FROM ads_daily GROUP BY campaign_id
     """).df()
     campaigns["event_id"] = [event_id(n, i) for n, i in zip(campaigns["campaign_name"], campaigns["campaign_id"])]
-    _write(campaigns, out_dir, "dim_campaign")
+    _write(campaigns, "dim_campaign")
 
     ads = con.sql("""
         SELECT ad_id, ANY_VALUE(ad_name) AS ad_name, ANY_VALUE(adset_id) AS adset_id,
@@ -119,22 +148,22 @@ def export(out_dir: Path, *, skip_stats: bool, n_boot: int) -> None:
             FROM read_parquet('{creatives.as_posix()}') GROUP BY ad_id
         """).df()
         ads = ads.merge(cr, on="ad_id", how="left")
-    _write(ads, out_dir, "dim_ad")
+    _write(ads, "dim_ad")
 
     # ---- facts ------------------------------------------------------------
-    _write(_facts(con, "ads_daily", []), out_dir, "fact_daily")
+    _write(_facts(con, "ads_daily", []), "fact_daily")
     if "ads_by_age_gender" in views:
-        _write(_facts(con, "ads_by_age_gender", ["age", "gender"]), out_dir, "fact_age_gender")
+        _write(_facts(con, "ads_by_age_gender", ["age", "gender"]), "fact_age_gender")
     if "ads_by_placement" in views:
         _write(_facts(con, "ads_by_placement", ["publisher_platform", "platform_position", "impression_device"]),
-               out_dir, "fact_placement")
+               "fact_placement")
     if "ads_by_region" in views:
-        _write(_facts(con, "ads_by_region", ["region"]), out_dir, "fact_region")
+        _write(_facts(con, "ads_by_region", ["region"]), "fact_region")
     if "campaigns_by_hour" in views:
         hourly = _facts(con, "campaigns_by_hour", ["hourly_stats_aggregated_by_advertiser_time_zone AS hour_range"],
                         key="campaign_id")
         hourly["hour"] = hourly["hour_range"].str.slice(0, 2).astype(int)
-        _write(hourly.drop(columns=["hour_range"]), out_dir, "fact_hourly")
+        _write(hourly.drop(columns=["hour_range"]), "fact_hourly")
 
     # ---- statistical results ---------------------------------------------
     if not skip_stats:
@@ -152,10 +181,13 @@ def export(out_dir: Path, *, skip_stats: bool, n_boot: int) -> None:
                              "cpc_ci_low", "cpc_ci_high", "p_value", "q_value", "significant"]])
             print(" ok")
         if frames:
-            _write(pd.concat(frames, ignore_index=True), out_dir, "stat_segments")
+            _write(pd.concat(frames, ignore_index=True), "stat_segments")
 
     con.close()
-    print("Terminé. Ouvrir Power BI Desktop > Obtenir les données > Dossier, puis suivre docs/powerbi.md.")
+    book = _flush(out_dir, also_csv=also_csv)
+    print(f"\nClasseur ecrit : {book}")
+    print("Power BI Desktop > Obtenir les donnees > Classeur Excel > tout cocher.")
+    print("Les types sont portes par le fichier : aucun reglage regional requis.")
 
 
 if __name__ == "__main__":
@@ -163,5 +195,6 @@ if __name__ == "__main__":
     parser.add_argument("--out", type=Path, default=ROOT / "export" / "powerbi")
     parser.add_argument("--skip-stats", action="store_true", help="ne pas recalculer les analyses de segments")
     parser.add_argument("--n-boot", type=int, default=2000)
+    parser.add_argument("--csv", action="store_true", help="ecrire aussi un CSV par table")
     args = parser.parse_args()
-    export(args.out, skip_stats=args.skip_stats, n_boot=args.n_boot)
+    export(args.out, skip_stats=args.skip_stats, n_boot=args.n_boot, also_csv=args.csv)

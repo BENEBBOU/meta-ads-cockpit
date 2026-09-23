@@ -212,9 +212,12 @@ kept in `actions_raw`, so an action type not anticipated here is recoverable.
 `python export_powerbi.py` writes a star schema (date, campaign and ad
 dimensions; daily, demographic, placement, region and hourly facts; the
 bootstrap segment results with confidence intervals and FDR-adjusted q-values)
-under `export/powerbi/`, ready for Power BI Desktop. Relationships, DAX
-measures and a six-page dashboard layout are described in
-[`docs/powerbi.md`](docs/powerbi.md).
+to `export/powerbi/meta_ads_powerbi.xlsx`, ready for Power BI Desktop. A
+workbook rather than CSVs because Power BI parses CSV text with its display
+language's locale: on a French install `21.16` silently loads as 2116, and
+18-digit Meta ids exceed the 15 digits a float stores exactly, so keys are
+written as text. Relationships, DAX measures and a six-page dashboard layout
+are described in [`docs/powerbi.md`](docs/powerbi.md).
 
 ---
 
@@ -257,7 +260,7 @@ run_backfill.py         extraction CLI
 build_warehouse.py      DuckDB views
 run_*_analysis.py       analysis CLIs
 refresh_all.py          orchestrates extraction -> warehouse -> publish
-export_powerbi.py       star-schema CSV export for Power BI (docs/powerbi.md)
+export_powerbi.py       star-schema Excel export for Power BI (docs/powerbi.md)
 make_sample_data.py     synthetic dataset
 make_figures.py         report figures, generated from the warehouse
 explore.py              browse / export
